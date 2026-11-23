@@ -27,6 +27,16 @@ def carregar_dados(caminho=config.CAMINHO_BANCO):
         )
 
 
+MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def periodo_icms(caminho=config.CAMINHO_BANCO):
+    """Ex.: 'jan–jul/2025' (o arquivo do portal traz ICMS só até julho de 2025)."""
+    with sqlite3.connect(caminho) as con:
+        ini, fim = con.execute("SELECT MIN(ano_mes), MAX(ano_mes) FROM repasse_icms").fetchone()
+    return f"{MESES[ini % 100 - 1]}–{MESES[fim % 100 - 1]}/{fim // 100}"
+
+
 def classificar_r(r):
     forca = abs(r)
     if forca >= 0.9:

@@ -26,7 +26,7 @@ from reportlab.platypus import (Image, PageBreak, Paragraph, SimpleDocTemplate,
                                 Spacer, Table, TableStyle)
 
 import config
-from modelo import ajustar, carregar_dados, prever
+from modelo import ajustar, carregar_dados, periodo_icms, prever
 
 PASTA_DOCS = config.PASTA_PROJETO / "docs"
 PASTA_FIG = PASTA_DOCS / "figuras"
@@ -106,7 +106,7 @@ def figura_dispersao(dados, m):
                     fontsize=7, xytext=(4, 4), textcoords="offset points")
     ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: inteiro(v)))
     ax.set_xlabel("Frota ativa de veículos (X)")
-    ax.set_ylabel("ICMS no ano (R$ milhões) (Y)")
+    ax.set_ylabel("ICMS jan–jul/2025 (R$ milhões) (Y)")
     ax.grid(alpha=0.3)
     ax.legend()
     caminho = PASTA_FIG / "dispersao.png"
@@ -119,7 +119,7 @@ def figura_top10(dados):
     top = dados.head(10).iloc[::-1]
     fig, ax = plt.subplots(figsize=(7.5, 3.6))
     ax.barh(top["municipio"].str.title(), top["icms_total"] / 1e6, color="#2b5797")
-    ax.set_xlabel("ICMS no ano (R$ milhões)")
+    ax.set_xlabel("ICMS jan–jul/2025 (R$ milhões)")
     ax.grid(axis="x", alpha=0.3)
     caminho = PASTA_FIG / "top10.png"
     fig.savefig(caminho, dpi=200, bbox_inches="tight")
@@ -133,6 +133,7 @@ def figura_top10(dados):
 def montar():
     PASTA_FIG.mkdir(parents=True, exist_ok=True)
     dados = carregar_dados()
+    per = periodo_icms()
     m = ajustar(dados)
     sem_capital = ajustar(dados[dados["municipio"] != "GOIANIA"])
 
@@ -202,13 +203,15 @@ def montar():
     h.append(Paragraph("2. Bases utilizadas", h1))
     h.append(tabela([
         ["Base", "Órgão", "Recorte usado", "Granularidade"],
-        ["Repasses aos municípios", "SEFAZ-GO", f"ICMS creditado, jan–dez/{config.ANO}", "Município / repasse"],
+        ["Repasses aos municípios", "SEFAZ-GO", f"ICMS creditado, {per}", "Município / repasse"],
         ["Frota de veículos", "DETRAN-GO", f"Frota ativa, dez/{config.ANO}", "Município / espécie"],
     ], [4.2, 2.6, 4.8, 4]))
     h.append(Spacer(1, 6))
     h.append(P(
         "As duas bases foram baixadas do Portal Dados Abertos Goiás (dadosabertos.go.gov.br) e cruzadas "
-        f"pelo nome do município, chegando a <b>{m['n']} municípios</b> com as duas informações."))
+        f"pelo nome do município, chegando a <b>{m['n']} municípios</b> com as duas informações. "
+        f"O arquivo anual de 2025 dos repasses só traz o ICMS até julho; por isso o Y é o total de {per}. "
+        "Como o período é o mesmo para todos os municípios, a comparação entre eles não é afetada."))
 
     # 3. ETL ------------------------------------------------------------------
     h.append(Paragraph("3. Tratamento dos dados (ETL)", h1))
@@ -242,7 +245,7 @@ def montar():
     h.append(Paragraph("5. Modelagem estatística", h1))
     h.append(P(
         "<b>Variável explicativa (X):</b> frota ativa do município. <b>Variável resposta (Y):</b> ICMS "
-        f"creditado ao município em {config.ANO}. A escolha segue a lógica do problema: queremos usar um "
+        f"creditado ao município em {per}. A escolha segue a lógica do problema: queremos usar um "
         "dado que sai rápido (frota) para estimar um valor que interessa à gestão (ICMS)."))
     h.append(P("Os coeficientes foram calculados pelas fórmulas de mínimos quadrados:"))
     h.append(Paragraph("a = Σ(x − x̄)(y − ȳ) / Σ(x − x̄)²  &nbsp;&nbsp;&nbsp; b = ȳ − a·x̄ "
@@ -269,8 +272,8 @@ def montar():
         f"O r de {num(m['r'], 3)} indica uma correlação <b>{m['classificacao']}</b>. O R² mostra que "
         f"cerca de {m['r2']*100:.0f}% da diferença de ICMS entre os municípios acompanha a diferença de "
         f"frota. Na prática, cada veículo a mais está associado a aproximadamente {reais(m['a'])} a mais "
-        f"de ICMS por ano. Para um município com a frota mediana de Goiás ({inteiro(frota_mediana)} veículos), "
-        f"o modelo estima {reais(y_med)} no ano."))
+        f"de ICMS no período. Para um município com a frota mediana de Goiás ({inteiro(frota_mediana)} veículos), "
+        f"o modelo estima {reais(y_med)} em {per}."))
     h.append(P(
         f"Testamos também o modelo <b>sem Goiânia</b>, que fica muito acima dos demais. O r passou para "
         f"{num(sem_capital['r'], 3)} ({sem_capital['classificacao']}), o que mostra se a relação se mantém "

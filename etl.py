@@ -153,6 +153,7 @@ def extrair_icms():
     n_dup = int(bruto["duplicada"].sum())
     bruto = bruto[~bruto["duplicada"]]                             # linhas repetidas
     bruto = bruto.dropna(subset=["municipio", "ano_mes", "valor_icms"])  # nulos
+    bruto = bruto[~bruto["municipio"].str.contains("NAO INFORMADO")]   # linha sem município
     bruto = bruto[bruto["ano_mes"] // 100 == config.ANO]          # só o ano analisado
     bruto = bruto[bruto["valor_icms"] >= 0]
 

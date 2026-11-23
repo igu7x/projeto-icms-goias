@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import config
-from modelo import ajustar, prever
+from modelo import ajustar, periodo_icms, prever
 
 st.set_page_config(page_title="ICMS x Frota - Goiás", page_icon="📊", layout="wide")
 
@@ -43,13 +43,14 @@ if not config.CAMINHO_BANCO.exists():
 # ----------------------------------------------------------------------------
 # Filtros (barra lateral)
 # ----------------------------------------------------------------------------
+PERIODO = periodo_icms()
 st.sidebar.header("Filtros")
 especies_todas = consultar("SELECT DISTINCT especie FROM frota ORDER BY especie")["especie"].tolist()
 especies = st.sidebar.multiselect(
     "Tipos de veículo considerados na frota (X)", especies_todas, default=especies_todas
 )
 tirar_capital = st.sidebar.checkbox("Excluir Goiânia (ponto muito fora da curva)", value=False)
-st.sidebar.caption(f"Fonte: Portal Dados Abertos Goiás · ICMS {config.ANO} · Frota dez/{config.ANO}")
+st.sidebar.caption(f"Fonte: Portal Dados Abertos Goiás · ICMS {PERIODO} · Frota dez/{config.ANO}")
 
 if not especies:
     st.warning("Selecione pelo menos um tipo de veículo.")
@@ -82,7 +83,7 @@ st.caption("Business Intelligence · Faculdade SENAI FATESG · "
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Municípios analisados", fmt_int(modelo["n"]))
-k2.metric(f"ICMS repassado em {config.ANO}", fmt_reais(dados["icms_total"].sum() / 1e9) + " bi")
+k2.metric(f"ICMS repassado ({PERIODO})", fmt_reais(dados["icms_total"].sum() / 1e9) + " bi")
 k3.metric("Frota ativa", fmt_int(dados["frota_total"].sum()))
 k4.metric("Correlação (r)", f"{modelo['r']:.3f}".replace(".", ","))
 
@@ -107,7 +108,8 @@ with aba_proj:
         st.subheader("Variáveis")
         st.markdown(
             "- **X (explicativa):** frota ativa de veículos do município (DETRAN-GO, dez/2025)\n"
-            "- **Y (resposta):** ICMS creditado ao município no ano de 2025 (SEFAZ-GO)"
+            f"- **Y (resposta):** ICMS creditado ao município em {PERIODO} (SEFAZ-GO). "
+            "O arquivo de 2025 do portal traz ICMS só até julho."
         )
     with c2:
         st.subheader("Como foi feito")
@@ -170,7 +172,7 @@ with aba_reg:
     c1, c2 = st.columns([2, 1])
     xs = np.linspace(0, dados["frota_total"].max(), 100)
     fig = px.scatter(dados, x="frota_total", y="icms_total", hover_name="municipio",
-                     labels={"frota_total": "Frota ativa (X)", "icms_total": "ICMS no ano (Y)"},
+                     labels={"frota_total": "Frota ativa (X)", "icms_total": f"ICMS {PERIODO} (Y)"},
                      title="Dispersão ICMS x Frota com reta de regressão", opacity=0.7)
     fig.add_trace(go.Scatter(x=xs, y=modelo["b"] + modelo["a"] * xs, mode="lines",
                              name="Reta ajustada", line=dict(color="red", width=3)))
@@ -190,7 +192,7 @@ with aba_reg:
 
     st.markdown(
         f"**Leitura:** cada veículo a mais na frota está associado, em média, a "
-        f"**{fmt_reais(modelo['a'])}** a mais de ICMS por ano. Isso é associação, "
+        f"**{fmt_reais(modelo['a'])}** a mais de ICMS no período. Isso é associação, "
         "não causa: a frota não gera ICMS sozinha, ela acompanha o tamanho da economia local."
     )
 
@@ -209,7 +211,7 @@ with aba_sim:
 
     y_hat, ic_inf, ic_sup = prever(modelo, frota_sim)
     with c2:
-        st.metric("ICMS estimado (Ŷ)", fmt_reais(y_hat))
+        st.metric(f"ICMS estimado em {PERIODO} (Ŷ)", fmt_reais(y_hat))
         st.caption(f"Intervalo de confiança 95% da média: {fmt_reais(ic_inf)} a {fmt_reais(ic_sup)}")
         st.code(f"Ŷ = {modelo['b']:,.2f} + {modelo['a']:,.2f} × {frota_sim:,}  =  {y_hat:,.2f}")
         if cidade != "(nenhum)":
